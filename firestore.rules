@@ -1,0 +1,187 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidLedgerSettings(data, userId) {
+      return data.keys().hasAll(['ownerId', 'currency', 'expenseCategories', 'incomeCategories', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'currency', 'expenseCategories', 'incomeCategories', 'createdAt', 'updatedAt'])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.currency is string
+        && data.currency.size() >= 1
+        && data.currency.size() <= 6
+        && data.expenseCategories is list
+        && data.expenseCategories.size() >= 1
+        && data.expenseCategories.size() <= 60
+        && data.expenseCategories[0] is string
+        && data.expenseCategories[0].size() >= 1
+        && data.expenseCategories[0].size() <= 24
+        && data.incomeCategories is list
+        && data.incomeCategories.size() >= 1
+        && data.incomeCategories.size() <= 60
+        && data.incomeCategories[0] is string
+        && data.incomeCategories[0].size() >= 1
+        && data.incomeCategories[0].size() <= 24
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAccount(data, userId) {
+      return data.keys().hasAll(['ownerId', 'name', 'opening', 'category', 'sortOrder', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'opening', 'category', 'sortOrder', 'createdAt', 'updatedAt'])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 30
+        && (data.opening is int || data.opening is float)
+        && data.opening >= -1000000000
+        && data.opening <= 1000000000
+        && data.category is string
+        && data.category in ['bank', 'card', 'cash', 'digital']
+        && (data.sortOrder is int || data.sortOrder is float)
+        && data.sortOrder >= 0
+        && data.sortOrder <= 10000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.keys().hasAll(['ownerId', 'type', 'date', 'amount', 'cat', 'acc', 'to', 'note', 'ts', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'type', 'date', 'amount', 'cat', 'acc', 'to', 'note', 'ts', 'createdAt', 'updatedAt'])
+        && data.ownerId is string
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && data.type is string
+        && data.type in ['expense', 'income', 'transfer']
+        && data.date is string
+        && data.date.size() == 10
+        && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && (data.amount is int || data.amount is float)
+        && data.amount > 0
+        && data.amount <= 1000000000
+        && data.cat is string
+        && data.cat.size() <= 24
+        && isValidId(data.acc)
+        && data.to is string
+        && data.to.size() <= 128
+        && (data.type != 'transfer' || (isValidId(data.to) && data.to != data.acc))
+        && data.note is string
+        && data.note.size() <= 120
+        && (data.ts is int || data.ts is float)
+        && data.ts >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidLedgerSettings(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidLedgerSettings(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['currency', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['expenseCategories', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['incomeCategories', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['currency', 'expenseCategories', 'incomeCategories', 'updatedAt'])
+        );
+      allow delete: if false;
+
+      match /accounts/{accountId} {
+        allow get: if isValidId(userId) && isValidId(accountId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(accountId)
+          && isOwner(userId)
+          && isValidAccount(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            exists(/databases/$(database)/documents/users/$(userId)) ||
+            existsAfter(/databases/$(database)/documents/users/$(userId))
+          );
+        allow update: if isValidId(userId)
+          && isValidId(accountId)
+          && isOwner(userId)
+          && isValidAccount(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'opening', 'category', 'sortOrder', 'updatedAt']);
+        allow delete: if isValidId(userId)
+          && isValidId(accountId)
+          && isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.ownerId == request.auth.uid;
+      }
+
+      match /transactions/{transactionId} {
+        allow get: if isValidId(userId) && isValidId(transactionId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(transactionId)
+          && isOwner(userId)
+          && isValidTransaction(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            exists(/databases/$(database)/documents/users/$(userId)) ||
+            existsAfter(/databases/$(database)/documents/users/$(userId))
+          );
+        allow update: if isValidId(userId)
+          && isValidId(transactionId)
+          && isOwner(userId)
+          && isValidTransaction(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['type', 'date', 'amount', 'cat', 'acc', 'to', 'note', 'ts', 'updatedAt']);
+        allow delete: if isValidId(userId)
+          && isValidId(transactionId)
+          && isOwner(userId)
+          && get(/databases/$(database)/documents/users/$(userId)).data.ownerId == request.auth.uid;
+      }
+    }
+  }
+}

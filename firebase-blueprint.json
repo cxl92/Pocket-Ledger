@@ -1,0 +1,204 @@
+{
+  "entities": {
+    "LedgerSettings": {
+      "title": "LedgerSettings",
+      "description": "User preferences, currency, and custom category lists for the personal money manager.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency symbol or code displayed before amounts",
+          "minLength": 1,
+          "maxLength": 6
+        },
+        "expenseCategories": {
+          "type": "array",
+          "description": "Ordered list of expense category names"
+        },
+        "incomeCategories": {
+          "type": "array",
+          "description": "Ordered list of income category names"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when settings were created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when settings were last updated"
+        }
+      },
+      "required": [
+        "ownerId",
+        "currency",
+        "expenseCategories",
+        "incomeCategories",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Financial account or wallet with an opening balance.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the account",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "opening": {
+          "type": "number",
+          "description": "Opening balance amount in account currency"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["bank", "card", "cash", "digital"],
+          "description": "Account category group"
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Display ordering index"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when account was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when account was last updated"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "opening",
+        "category",
+        "sortOrder",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Single financial ledger entry representing an expense, income, or account transfer.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["expense", "income", "transfer"],
+          "description": "Entry type"
+        },
+        "date": {
+          "type": "string",
+          "description": "ISO calendar date YYYY-MM-DD",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Positive monetary amount"
+        },
+        "cat": {
+          "type": "string",
+          "description": "Category name (empty string for transfers)",
+          "minLength": 0,
+          "maxLength": 24
+        },
+        "acc": {
+          "type": "string",
+          "description": "Source account ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "to": {
+          "type": "string",
+          "description": "Destination account ID for transfers (empty string otherwise)",
+          "minLength": 0,
+          "maxLength": 128
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional note or memo",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "ts": {
+          "type": "number",
+          "description": "Client creation epoch milliseconds for intra-day sorting"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when transaction was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when transaction was last updated"
+        }
+      },
+      "required": [
+        "ownerId",
+        "type",
+        "date",
+        "amount",
+        "cat",
+        "acc",
+        "to",
+        "note",
+        "ts",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/LedgerSettings"
+      },
+      "description": "Owner-private ledger configuration, currency, and category lists."
+    },
+    "/users/{userId}/accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/entities/Account"
+      },
+      "description": "Owner-private financial accounts and opening balances."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": {
+        "$ref": "#/entities/Transaction"
+      },
+      "description": "Owner-private spending, income, and transfer ledger entries."
+    }
+  }
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Pocket Ledger monogram">
+  <rect width="120" height="120" rx="27" fill="#0B3D2E" />
+  <g transform="translate(60 60) scale(.84) translate(-62 -60)" fill="none" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M84 96H40V24H62A19 19 0 0 1 62 62H40" />
+    <circle cx="72" cy="79" r="5.5" fill="#FFFFFF" stroke="none" />
+  </g>
+</svg>
